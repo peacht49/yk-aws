@@ -16,7 +16,7 @@ module "vpc" {
   source = "./modules/vpc"
 }
 
-
+/***
 # (Left) ec2's own variable name, (right) passing vpc module output's value path
 module "ec2" {
   source = "./modules/ec2"
@@ -24,7 +24,14 @@ module "ec2" {
   security_group_ids = [module.vpc.security_group_id] # Defined as string in VPC, but list of string in EC2
   # As we want to have option of more than 1 security group for ec2, so pass this as a list [ ]
 }
+***/
 
+module "ec2" {
+  source = "./modules/ec2"
+  subnet_id = []
+  security_group_ids = []
+  vpc_id = module.vpc.vpc_id
+}
 
 module "load_balancer" {
   source = "./modules/load_balancer"
@@ -40,6 +47,7 @@ resource "aws_autoscaling_group" "web-ASG" {
   min_size = 1
   max_size = 3
   vpc_zone_identifier = [module.vpc.subnet_az1_id, module.vpc.subnet_az2_id]
+  target_group_arns = [module.load_balancer.tg_arn]
 
   launch_template {
     id = module.ec2.web_launch_template.id
