@@ -1,0 +1,65 @@
+
+- name: Install node exporter
+  hosts: ec2_instances
+  become: yes # Elevate to root to install packages
+  tasks:
+
+  - name: Download node exporter binary
+    get_url:
+      url: "https://github.com/prometheus/node_exporter/releases/download/v1.0.1/node_exporter-1.0.1.linux-amd64.tar.gz"
+      dest: /tmp/node_exporter.tar.gz
+
+  - name: Extract Node exporter
+    unarchive: 
+      src: /tmp/node_exporter.tar.gz
+      dest: /tmp
+      remote_src: yes
+  
+  - name: Create a user for Node Exporter
+    user: 
+      name: node_exporter
+      shell: /sbin/nologin
+      create_home: no
+      state: present
+
+  - name: Find extracted Node exporter directory
+    find:
+      paths: /tmp/
+      patterns: 'node_exporter-*'
+      file_type: directory
+    register: node_exporter_dir  # Captures the find output and stores in variable
+  
+  - name: Copy the node_exporter binary to correct location
+    copy: 
+      src: "{{ item.path }}/node_exporter"
+      dest: /usr/local/bin/node_exporter
+      mode: '0755'
+      remote_src: yes
+    with_items: "{{ node_exporter_dir.files }}" # .files because find module returns a dictionary, files is a key
+    when: node_exporter_dir.matched > 0 # | as a jinja filter
+
+  - name: Create systemd file for Node Exporter
+    copy: 
+      dest: /etc/systemd/system/node_exporter.service
+      content: |
+        [Unit]
+        Description=Node Exporter
+        After=network.target
+        
+        [Service]
+        User=node_exporter
+        ExecStart=/usr/local/bin/node_exporter
+        
+        [Install]
+        WantedBy=multi-user.target
+
+  - name: Manually trigger handler to reload systemd
+    systemd: 
+      daemon_reload: yes
+
+  - name: Start and enable node exporter service
+    systemd: 
+      name: node_exporter
+      enabled: yes
+      state: started
+

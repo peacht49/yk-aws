@@ -1,0 +1,127 @@
+---
+
+- name: Install prometheus
+  hosts: ec2_instances
+  become: yes
+  tasks:
+
+    - name: Download prometheus binary
+      get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v2.1.0/prometheus-2.1.0.linux-amd64.tar.gz"
+        dest: /tmp/prometheus.tar.gz
+
+    - name: Extract Prometheus
+      unarchive:
+        src: /tmp/prometheus.tar.gz
+        dest: /tmp
+        remote_src: yes
+
+    - name: Create Prometheus user
+      user:
+        name: prometheus
+        shell: /sbin/nologin
+        create_home: no
+        state: present
+
+    - name: Find extracted prometheus directory
+      find: 
+        paths: /tmp
+        patterns: "prometheus-*.linux-amd64"
+        file_type: directory
+      register: prometheus_dir
+  
+    - name: Move prometheus /usr/local/bin
+      copy: 
+        src: "{{ item.path }}/prometheus"
+        dest: /usr/local/bin/prometheus
+        remote_src: yes
+        mode: '0775'
+      with_items: "{{ prometheus_dir.files }}"
+      when: prometheus_dir.matched > 0
+
+    - name: Move promtool to /usr/local/bin
+      copy:
+        src: "{{ item.path }}/promtool"
+        dest: /usr/local/promtool
+        remote_src: yes
+        mode: '0775'
+      with_items: "{{ prometheus_dir.files }}"
+      when: prometheus_dir.matched > 0
+
+    - name: Create directory for config files
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      with_items:
+        - /etc/prometheus
+        - /var/lib/prometheus
+    
+    - name: Move consoles to /etc/prometheus
+      copy:
+        src: "{{ item.path }}/consoles"
+        dest: /etc/prometheus
+        remote_src: yes
+        mode: '0775'
+      with_items: "{{ prometheus_dir.files }}"
+
+    - name: Move console libraries to /etc/prometheus
+      copy: 
+        src: "{{ item.path }}/console_libraries"
+        dest: /etc/prometheus
+        remote_src: yes
+        mode: '0755'
+      with_items: "{{ prometheus_dir.files }}" 
+
+    - name: Change owners for /var/lib/prometheus
+      file:
+        path: /var/lib/prometheus
+        owner: prometheus
+        group: prometheus
+        recurse: yes
+        mode: '0755'
+    - name: Add config file
+      copy: 
+        dest: /etc/prometheus/prometheus.yml
+        content: |
+          global: 
+            scrape_interval: 15s
+
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets: ['3.235.150.114:9100','3.88.43.50:9100']
+
+    - name: Create systemd file for prometheus
+      copy: 
+        dest: /etc/systemd/system/prometheus.service
+        content: |
+          [[Unit]
+          Description=Prometheus
+          After=network.target
+
+          [Service]
+          User=prometheus 
+          Group=prometheus 
+          Type=simple 
+          ExecStart=/usr/local/bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/var/lib/prometheus/ --web.console.libraries=/usr/local/share/prometheus/console_libraries --web.console.templates=/usr/local/share/prometheus/consoles
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Manual reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Start and enable prometheus service
+      systemd:
+        name: prometheus
+        enabled: yes
+        state: started
+
+
+
