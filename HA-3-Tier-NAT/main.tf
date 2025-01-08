@@ -16,15 +16,6 @@ module "vpc" {
   source = "./modules/vpc"
 }
 
-/***
-# (Left) ec2's own variable name, (right) passing vpc module output's value path
-module "ec2" {
-  source = "./modules/ec2"
-  subnet_id = [module.vpc.subnet_az1_id,module.vpc.subnet_az2_id]
-  security_group_ids = [module.vpc.security_group_id] # Defined as string in VPC, but list of string in EC2
-  # As we want to have option of more than 1 security group for ec2, so pass this as a list [ ]
-}
-***/
 
 module "ec2" {
   source = "./modules/ec2"
@@ -44,7 +35,6 @@ module "mariadb_asg" {
   vpc_id = module.vpc.vpc_id
 }
 
-# Note: Always reference module output in root main.tf
 
 # Define ASG
 resource "aws_autoscaling_group" "web-ASG" {
