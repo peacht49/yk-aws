@@ -30,8 +30,6 @@ resource "aws_instance" "web_instance" {
   ami = var.ami
   instance_type = var.instance_type
   count = var.instance_count
-  # Dynamically select subnet ID based on count.index
-  # var.subnet_ids should be a list of subnet IDs passed from root main.tf
   subnet_id = var.subnet_id[count.index]
 
   tags = {
