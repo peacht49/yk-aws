@@ -1,0 +1,19 @@
+- name: Configure Web Server
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Install Nginx
+      dnf:
+        name: nginx
+        state: latest
+
+    - name: Start Nginx
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Create a welcome file
+      copy:
+        content: "Built by Terraform, Configured by Ansible in WSL!"
+        dest: /usr/share/nginx/html/index.html
